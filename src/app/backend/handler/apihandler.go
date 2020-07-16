@@ -53,6 +53,7 @@ import (
 	"github.com/kubernetes/dashboard/src/app/backend/resource/horizontalpodautoscaler"
 	"github.com/kubernetes/dashboard/src/app/backend/resource/ingress"
 	"github.com/kubernetes/dashboard/src/app/backend/resource/job"
+	"github.com/kubernetes/dashboard/src/app/backend/resource/label"
 	"github.com/kubernetes/dashboard/src/app/backend/resource/logs"
 	ns "github.com/kubernetes/dashboard/src/app/backend/resource/namespace"
 	"github.com/kubernetes/dashboard/src/app/backend/resource/node"
@@ -130,6 +131,12 @@ func CreateHTTPAPIHandler(iManager integration.IntegrationManager, cManager clie
 	systemBannerHandler := systembanner.NewSystemBannerHandler(sbManager)
 	systemBannerHandler.Install(apiV1Ws)
 
+	apiV1Ws.Route(
+		apiV1Ws.GET("/label/{node}/{label}").
+			To(apiHandler.handleLabelAddition))
+	apiV1Ws.Route(
+		apiV1Ws.DELETE("/label/{node}").
+			To(apiHandler.handleLabelRemoval))
 	apiV1Ws.Route(
 		apiV1Ws.GET("csrftoken/{action}").
 			To(apiHandler.handleGetCsrfToken).
@@ -673,6 +680,30 @@ func CreateHTTPAPIHandler(iManager integration.IntegrationManager, cManager clie
 			Writes(logs.LogDetails{}))
 
 	return wsContainer, nil
+}
+
+func (apiHandler *APIHandler) handleLabelAddition(request *restful.Request, response *restful.Response) {
+	k8sClient, err := apiHandler.cManager.Client(request)
+	if err != nil {
+		errors.HandleInternalError(response, err)
+		return
+	}
+	nodeName := request.PathParameter("node")
+	labelContents := request.PathParameter("label")
+	label.SetNodeLabel(k8sClient, nodeName, labelContents)
+	response.WriteHeader(http.StatusOK)
+}
+
+func (apiHandler *APIHandler) handleLabelRemoval(request *restful.Request, response *restful.Response) {
+	k8sClient, err := apiHandler.cManager.Client(request)
+	if err != nil {
+		errors.HandleInternalError(response, err)
+		return
+	}
+	nodeName := request.PathParameter("node")
+
+	label.RemoveNodeLabel(k8sClient, nodeName)
+	response.WriteHeader(http.StatusOK)
 }
 
 func (apiHandler *APIHandler) handleGetClusterRoleList(request *restful.Request, response *restful.Response) {
